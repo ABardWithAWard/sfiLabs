@@ -1,60 +1,85 @@
 import axios from "axios";
+import DataLoader from "dataloader";
 import Film from "../schema/film.schema";
 import Character from "../schema/character.schema";
 
 class StarWarsService {
-    private readonly baseUrl = "https://swapi.dev/api";
+  private readonly baseUrl = "https://swapi.dev/api";
 
-    private filmMapper(film: any): Film {
-        return {
-            title: film.title,
-            director: film.director,
-            producer: film.producer,
-            releaseDate: film.releaseDate,
-            charactersId: film.characters.map((url: string) => url.split("/").slice(-2)[0]),
-            characters: [],
-        };
-    }
+  private batchCharacters = new DataLoader(async (ids: number[]) => {
+    const characters = await Promise.all(
+      ids.map(
+        async (id) => (await axios.get(`${this.baseUrl}/people/${id}`)).data
+      )
+    );
 
-    private characterMapper(character: any): Character {
-        return {
-            name: character.name,
-            height: character.height,
-            gender: character.gender,
-            filmsId: character.films.map((url: string) => url.split("/").slice(-2)[0]),
-            films: [],
-        };
-    }
+    const mappedCharacters = characters.map(this.characterMapper);
 
-    async getFilms () {
-        const results = (await axios.get(`${this.baseUrl}/films`)).data.results;
-        return results.map(this.filmMapper);
-    }
+    return mappedCharacters;
+  });
 
-    async getCharacters () {
-        const results = (await axios.get(`${this.baseUrl}/people`)).data.results;
-        return results.map(this.characterMapper);
-    }
+  private batchFilms = new DataLoader(async (ids: number[]) => {
+    const films = await Promise.all(
+      ids.map(
+        async (id) => (await axios.get(`${this.baseUrl}/films/${id}`)).data
+      )
+    );
 
-    async getCharacter (id: number) {
-        const results = (await axios.get(`${this.baseUrl}/people/${id}`)).data;
-        return this.characterMapper(results);
-    }
+    const mappedFilms = films.map(this.filmMapper);
 
-    async getFilm (id: number) {
-        const results = (await axios.get(`${this.baseUrl}/films/${id}`)).data;
-        return this.filmMapper(results);
-    }
+    return mappedFilms;
+  });
 
-    async getFilmsByIds(ids:number[]) {
-        const films = await Promise.all(ids.map((id) => this.getFilm(id)));
-        return films;
-    }
+  private filmMapper(film: any): Film {
+    return {
+      title: film.title,
+      director: film.director,
+      producer: film.producer,
+      releaseDate: film.release_date,
+      charactersIds: film.characters.map(
+        (url: string) => url.split("/").slice(-2)[0]
+      ),
+      characters: [],
+    };
+  }
 
-    async getCharactersByIds(ids:number[]) {
-        const characters = await Promise.all(ids.map((id) => this.getCharacter(id)));
-        return characters;
-    }
+  private characterMapper(character: any): Character {
+    return {
+      name: character.name,
+      height: character.height,
+      gender: character.gender,
+      filmsIds: character.films.map(
+        (url: string) => url.split("/").slice(-2)[0]
+      ),
+      films: [],
+    };
+  }
+
+  async getFilms() {
+    const results = (await axios.get(`${this.baseUrl}/films`)).data.results;
+    return results.map(this.filmMapper);
+  }
+
+  async getCharacters() {
+    const results = (await axios.get(`${this.baseUrl}/people`)).data.results;
+    return results.map(this.characterMapper);
+  }
+
+  async getCharacter(id: number) {
+    return (await this.batchCharacters.load(id)) as Character;
+  }
+
+  async getFilm(id: number) {
+    return (await this.batchFilms.load(id)) as Film;
+  }
+
+  async getFilmsByIds(ids: number[]) {
+    return (await this.batchFilms.loadMany(ids)) as Film[];
+  }
+
+  async getCharactersByIds(ids: number[]) {
+    return (await this.batchCharacters.loadMany(ids)) as Character[];
+  }
 }
 
 export default StarWarsService;
