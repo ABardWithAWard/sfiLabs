@@ -1,1 +1,1 @@
-Projekt robiony na warsztatach studentow informatyki w krakowie.
+Projekt robiony na warsztatach festiwalu studentow informatyki w krakowie.
